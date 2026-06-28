@@ -246,36 +246,39 @@ async function generateProgram(profile: UserProfile): Promise<WorkoutProgram> {
   const cinsiyet = profile.gender === "erkek" ? "Erkek" : "Kadın";
 
   const style = (profile.trainingStyle || "hipertrofi") as "guc" | "hipertrofi";
-  const repAraligi = style === "guc"
-    ? "Ana hareketler 3-5 tekrar (ağır), yardımcı hareketler 5-8 tekrar, dinlenme 3-5 dk"
-    : "Ana hareketler 6-10 tekrar, yardımcı hareketler 10-15 tekrar, dinlenme 60-90 sn";
-  const setHedefi = profile.goal === "kilo_al"
-    ? "15-20 set/kas grubu/hafta"
-    : "10-15 set/kas grubu/hafta";
   const gunSayisi = profile.goal === "kilo_al" ? "4" : "3";
 
-  const prompt = `Sen bilim tabanlı fitness uzmanısın (Jeff Nippard metodolojisi). ${cinsiyet}, ${profile.age} yaş, ${profile.weight}kg, hedef: ${hedef}, antrenman: ${tip}, tarz: ${style === "guc" ? "güç antrenmanı" : "hipertrofi (kas kazanımı)"}.
+  const gucOrnek = `{"Pazartesi":{"focus":"Push — Güç (Göğüs + Omuz + Triceps)","exercises":[{"name":"Bench Press","sets":"5","reps":"5","rest":"3-4 dk","tip":"Kürek kemiklerini sıkıştır, ayaklar yerde sabit"},{"name":"Overhead Press","sets":"4","reps":"4-5","rest":"3 dk","tip":"Core'u sık, bel boşluk yapma"},{"name":"Incline Bench Press","sets":"3","reps":"5-6","rest":"2-3 dk","tip":"Omuzları geriye at"},{"name":"Dips","sets":"3","reps":"6-8","rest":"2 dk","tip":"Öne eğil, göğse hisset"},{"name":"Skull Crusher","sets":"3","reps":"6-8","rest":"90 sn","tip":"Dirsekleri sabit tut"}]},"Salı":null,"Çarşamba":{"focus":"Pull — Güç (Sırt + Biceps)","exercises":[{"name":"Deadlift","sets":"5","reps":"5","rest":"4-5 dk","tip":"Kalçayı öne it, sırtı düz tut"},{"name":"Barbell Row","sets":"4","reps":"5","rest":"3 dk","tip":"Sırtı düz, kürek kemiklerini sıkıştır"},{"name":"Weighted Pull-up","sets":"4","reps":"4-6","rest":"3 dk","tip":"Tam açıl, çeneni bara getir"},{"name":"Cable Row","sets":"3","reps":"6-8","rest":"2 dk","tip":"Göğsü dik tut"},{"name":"Barbell Curl","sets":"3","reps":"6-8","rest":"90 sn","tip":"Sallanma, dirsek sabit"}]},"Perşembe":null,"Cuma":{"focus":"Legs — Güç (Squat + Hamstring)","exercises":[{"name":"Back Squat","sets":"5","reps":"5","rest":"4-5 dk","tip":"Diz ayak ucunu geçmesin, sırt düz"},{"name":"Romanian Deadlift","sets":"4","reps":"5-6","rest":"3 dk","tip":"Kalçayı geriye it, diz hafif bükük"},{"name":"Leg Press","sets":"3","reps":"6-8","rest":"2-3 dk","tip":"Dizleri içe kapama"},{"name":"Walking Lunge","sets":"3","reps":"6-8","rest":"2 dk","tip":"Ön diz 90 derece yap"},{"name":"Leg Curl","sets":"3","reps":"8-10","rest":"90 sn","tip":"Kalçayı yerden kaldırma"}]},"Cumartesi":null,"Pazar":null}`;
 
-PROGRAM YAPISI (kesinlikle uy):
-- Split: Push / Pull / Legs — HER ZAMAN bu yapıyı kullan
-- ${gunSayisi === "4" ? "4 günlük PPL: Pazartesi=Push, Çarşamba=Pull, Cuma=Legs, Pazar=Push B veya Upper" : "3 günlük PPL: Pazartesi=Push, Çarşamba=Pull, Cuma=Legs"}
-- Her kas grubu haftada minimum 2 kez çalışmalı
-- Haftalık set hedefi: ${setHedefi}
+  const hipOrnek = `{"Pazartesi":{"focus":"Push — Hipertrofi (Göğüs + Omuz + Triceps)","exercises":[{"name":"Bench Press","sets":"4","reps":"8-10","rest":"90 sn","tip":"Göğse değdirirken kürek kemiklerini sıkıştır"},{"name":"Incline DB Press","sets":"3","reps":"10-12","rest":"90 sn","tip":"Omuzları geriye at"},{"name":"Cable Fly","sets":"3","reps":"12-15","rest":"60 sn","tip":"Göğste gerilimi hisset"},{"name":"Lateral Raise","sets":"3","reps":"12-15","rest":"60 sn","tip":"Küçük parmak tarafı yukarı baksın"},{"name":"Tricep Pushdown","sets":"3","reps":"12-15","rest":"60 sn","tip":"Dirsekleri sabit tut"},{"name":"Overhead DB Extension","sets":"3","reps":"10-12","rest":"60 sn","tip":"Dirsekler kulağa yakın kalsın"}]},"Salı":null,"Çarşamba":{"focus":"Pull — Hipertrofi (Sırt + Biceps)","exercises":[{"name":"Pull-up","sets":"4","reps":"8-10","rest":"90 sn","tip":"Tam açılmadan tekrarı bitirme"},{"name":"Barbell Row","sets":"4","reps":"8-10","rest":"90 sn","tip":"Sırtı düz tut"},{"name":"Cable Row","sets":"3","reps":"10-12","rest":"75 sn","tip":"Göğsü dik tut"},{"name":"Face Pull","sets":"3","reps":"15-20","rest":"60 sn","tip":"Dış rotasyona ver"},{"name":"Dumbbell Curl","sets":"3","reps":"10-12","rest":"60 sn","tip":"Omuzları geriye at"},{"name":"Hammer Curl","sets":"3","reps":"10-12","rest":"60 sn","tip":"Bileği nötr tut"}]},"Perşembe":null,"Cuma":{"focus":"Legs — Hipertrofi (Quad + Hamstring + Glute)","exercises":[{"name":"Back Squat","sets":"4","reps":"8-10","rest":"2 dk","tip":"İnişte diziyi içe kapama"},{"name":"Leg Press","sets":"3","reps":"10-12","rest":"90 sn","tip":"Dizleri geçirmeden kalk"},{"name":"Romanian Deadlift","sets":"3","reps":"10-12","rest":"90 sn","tip":"Kalçayı geriye it"},{"name":"Leg Extension","sets":"3","reps":"12-15","rest":"60 sn","tip":"Üstte 1 sn tut"},{"name":"Leg Curl","sets":"3","reps":"10-12","rest":"60 sn","tip":"Kalçayı yerden kaldırma"},{"name":"Calf Raise","sets":"4","reps":"15-20","rest":"45 sn","tip":"Tam uzanıp tam yükselt"}]},"Cumartesi":null,"Pazar":null}`;
 
-EGZERSİZ SAYISI:
-- Her antrenman günü 5-7 egzersiz (kesinlikle 5'in altına düşme)
-- Push günü: Göğüs 3-4 egzersiz + Omuz 1-2 egzersiz + Triceps 1-2 egzersiz
-- Pull günü: Sırt 3-4 egzersiz + Biceps 2 egzersiz
-- Legs günü: Quad 2-3 egzersiz + Hamstring 1-2 egzersiz + Glute/Karın 1-2 egzersiz
-- Her egzersiz 3-4 set
+  const prompt = `Sen bilim tabanlı fitness uzmanısın (Jeff Nippard metodolojisi). ${cinsiyet}, ${profile.age} yaş, ${profile.weight}kg, hedef: ${hedef}, antrenman: ${tip}.
 
-TEKRAR / DİNLENME:
-- ${repAraligi}
+ANTRENMAN TARZI: ${style === "guc" ? "GÜÇ ANTRENMANÜ — düşük tekrar, ağır yük, uzun dinlenme" : "HİPERTROFİ — orta tekrar, orta yük, kısa dinlenme"}
 
-KURAL: Her egzersize kısa "tip" ekle — yeni başlayanlar için TEK önemli form notu (max 10 kelime, Türkçe, emir kipi).
+PROGRAM YAPISI:
+- Split: Push / Pull / Legs — HER ZAMAN
+- ${gunSayisi === "4" ? "4 gün: Pazartesi=Push, Çarşamba=Pull, Cuma=Legs, Pazar=Push B veya Pull B" : "3 gün: Pazartesi=Push, Çarşamba=Pull, Cuma=Legs"}
+- Her gün 5-7 egzersiz (5'in altına düşme)
 
-SADECE JSON döndür, başka hiçbir şey yazma:
-{"Pazartesi":{"focus":"Göğüs + Triceps","exercises":[{"name":"Bench Press","sets":"4","reps":"8-10","rest":"90 sn","tip":"Göğse değdirirken kürek kemiklerini sıkıştır"},{"name":"Incline DB Press","sets":"3","reps":"10-12","rest":"90 sn","tip":"Omuzları geriye at"},{"name":"Tricep Pushdown","sets":"3","reps":"12-15","rest":"60 sn","tip":"Dirsekleri sabit tut"}]},"Salı":null,"Çarşamba":{"focus":"Sırt + Biceps","exercises":[{"name":"Pull-up","sets":"4","reps":"6-8","rest":"90 sn","tip":"Tam açılmadan tekrarı bitirme"},{"name":"Barbell Row","sets":"4","reps":"8-10","rest":"90 sn","tip":"Sırtı düz tut"},{"name":"Dumbbell Curl","sets":"3","reps":"10-12","rest":"60 sn","tip":"Omuzları geriye at"}]},"Perşembe":null,"Cuma":{"focus":"Bacak + Omuz","exercises":[{"name":"Squat","sets":"4","reps":"8-10","rest":"120 sn","tip":"İnişte diziyi içe kapama"},{"name":"Leg Press","sets":"3","reps":"10-12","rest":"90 sn","tip":"Dizleri geçirmeden kalk"},{"name":"OHP","sets":"3","reps":"8-10","rest":"90 sn","tip":"Core'u sık, sırtı düz tut"}]},"Cumartesi":null,"Pazar":null}`;
+${style === "guc" ? `GÜÇ KURALLARI:
+- Ana bileşik hareketler (Squat, Bench, Deadlift, OHP): 4-5 set × 3-5 tekrar, 3-5 dk dinlenme
+- Yardımcı bileşik hareketler: 3-4 set × 5-6 tekrar, 2-3 dk dinlenme
+- İzolasyon: 3 set × 6-8 tekrar, 90 sn dinlenme
+- Push: Bench Press veya OHP ana hareket olarak başla
+- Pull: Deadlift veya Weighted Pull-up ana hareket olarak başla
+- Legs: Back Squat ana hareket olarak başla` : `HİPERTROFİ KURALLARI:
+- Ana hareketler: 3-4 set × 8-10 tekrar, 90 sn dinlenme
+- Yardımcı hareketler: 3 set × 10-12 tekrar, 75 sn dinlenme
+- İzolasyon: 3 set × 12-15 tekrar, 60 sn dinlenme
+- Push: Bench Press ile başla, Cable Fly/Lateral Raise ekle
+- Pull: Pull-up ile başla, Face Pull ekle
+- Legs: Squat ile başla, Leg Extension/Curl/Calf Raise ekle`}
+
+KURAL: Her egzersize kısa "tip" ekle — yeni başlayanlar için TEK form notu (max 10 kelime, Türkçe, emir kipi).
+
+ÖRNEK ÇIKTI — AYNI FORMATI KULLAN:
+${style === "guc" ? gucOrnek : hipOrnek}`;
 
   try {
     const raw = await groqChat(prompt, 3500);
