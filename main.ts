@@ -235,7 +235,7 @@ async function handleOnboarding(userId: string, text: string, profile: UserProfi
     profile.onboardingStep = "name";
     profile.name = "";
     saveProfile(profile);
-    await sendTelegram(userId, `FitBot'a hos geldin!\n\nAdin ne?`);
+    await sendTelegram(userId, `Merhabalar, ben kişisel koçunuz! 🏋️\n\nİlk olarak adınızı öğrenebilir miyim?`);
     return;
   }
 
@@ -374,9 +374,8 @@ async function handleMessage(userId: string, text: string) {
     };
     saveProfile(yeni);
     await sendTelegram(userId,
-      `FitBot'a hos geldin!\n\n` +
-      `Sana ozel kalori takibi ve antrenman programi hazirlayacagim.\n\n` +
-      `Adin ne?`
+      `Merhabalar, ben kişisel koçunuz! 🏋️\n\n` +
+      `İlk olarak adınızı öğrenebilir miyim?`
     );
     return;
   }
@@ -392,7 +391,7 @@ async function handleMessage(userId: string, text: string) {
         createdAt: new Date().toISOString().split("T")[0],
       };
       saveProfile(yeni);
-      await sendTelegram(userId, `FitBot'a hos geldin!\n\nAdin ne?`);
+      await sendTelegram(userId, `Merhabalar, ben kişisel koçunuz! 🏋️\n\nİlk olarak adınızı öğrenebilir miyim?`);
       return;
     }
     await handleOnboarding(userId, text, profile);
