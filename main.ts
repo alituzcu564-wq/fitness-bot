@@ -22,6 +22,9 @@ interface UserProfile {
   workoutType: "ev" | "salon" | "ikisi";
   tdee: number;
   dailyCalorieGoal: number;
+  proteinGoal: number;
+  carbGoal: number;
+  fatGoal: number;
   onboardingStep: string | null;
   createdAt: string;
 }
@@ -132,6 +135,17 @@ function goalCalories(tdee: number, goal: UserProfile["goal"]): number {
   if (goal === "kilo_ver") return tdee - 300;
   if (goal === "kilo_al") return tdee + 300;
   return tdee;
+}
+
+function calculateMacros(weight: number, goal: UserProfile["goal"], calories: number) {
+  // Protein: kilo_ver=2.2g/kg, kilo_al=2.0g/kg, form_koru=1.8g/kg
+  const proteinPerKg = goal === "kilo_ver" ? 2.2 : goal === "kilo_al" ? 2.0 : 1.8;
+  const protein = Math.round(weight * proteinPerKg);
+  // Yağ: kalorinin %25'i
+  const fat = Math.round((calories * 0.25) / 9);
+  // Karb: geri kalan
+  const carb = Math.round((calories - protein * 4 - fat * 9) / 4);
+  return { protein, carb: Math.max(0, carb), fat };
 }
 
 // ── Telegram ──────────────────────────────────────────────────────────────────
@@ -366,6 +380,10 @@ async function handleOnboarding(userId: string, text: string, profile: UserProfi
 
     profile.tdee = calculateTDEE(profile);
     profile.dailyCalorieGoal = goalCalories(profile.tdee, profile.goal);
+    const macros = calculateMacros(profile.weight, profile.goal, profile.dailyCalorieGoal);
+    profile.proteinGoal = macros.protein;
+    profile.carbGoal = macros.carb;
+    profile.fatGoal = macros.fat;
     profile.onboardingStep = null;
     saveProfile(profile);
 
@@ -384,7 +402,11 @@ async function handleOnboarding(userId: string, text: string, profile: UserProfi
       `⚖️ ${profile.weight} kg | ${profile.height} cm\n` +
       `🎯 Hedef: ${goalText}\n\n` +
       `🔥 Günlük kalori hedefin: *${profile.dailyCalorieGoal} kcal*\n` +
-      `📊 TDEE: ${profile.tdee} kcal`
+      `📊 TDEE: ${profile.tdee} kcal\n\n` +
+      `*Günlük Makro Hedeflerin:*\n` +
+      `🥩 Protein: *${profile.proteinGoal}g*\n` +
+      `🍞 Karb: *${profile.carbGoal}g*\n` +
+      `🧈 Yağ: *${profile.fatGoal}g*`
     );
 
     // Haftalık programı detaylı göster
@@ -518,15 +540,29 @@ async function handleMessage(userId: string, text: string) {
     const totCarb = log.meals.reduce((s, m) => s + m.carb, 0);
     const totFat = log.meals.reduce((s, m) => s + m.fat, 0);
     const kalan = profile.dailyCalorieGoal - totCal;
+
+    // Kalori çubuğu
     const pct = Math.min(100, Math.round((totCal / profile.dailyCalorieGoal) * 100));
     const dolu = Math.floor(pct / 10);
     const bar = "█".repeat(dolu) + "░".repeat(10 - dolu);
+
+    // Makro çubukları (hedefe göre %)
+    const pg = profile.proteinGoal || 1;
+    const cg = profile.carbGoal || 1;
+    const fg = profile.fatGoal || 1;
+    const macroBar = (val: number, goal: number) => {
+      const p = Math.min(100, Math.round((val / goal) * 100));
+      const d = Math.floor(p / 5);
+      return `${"▓".repeat(d)}${"░".repeat(20 - d)} ${val}/${goal}g`;
+    };
+
     const ogunler = log.meals.map((m, i) => `${i + 1}. ${m.time} — ${m.description} _(${m.calories} kcal)_`).join("\n");
     await sendTelegram(userId,
       `📊 *Bugünkü Özet*\n\n` +
-      `${bar} %${pct}\n` +
-      `🔥 ${totCal} / ${profile.dailyCalorieGoal} kcal\n\n` +
-      `🥩 Protein: ${totProt}g  |  🍞 Karb: ${totCarb}g  |  🧈 Yağ: ${totFat}g\n\n` +
+      `🔥 Kalori\n${bar} %${pct}\n${totCal} / ${profile.dailyCalorieGoal} kcal\n\n` +
+      `🥩 Protein\n${macroBar(totProt, pg)}\n\n` +
+      `🍞 Karb\n${macroBar(totCarb, cg)}\n\n` +
+      `🧈 Yağ\n${macroBar(totFat, fg)}\n\n` +
       `*Öğünler:*\n${ogunler}\n\n` +
       (kalan > 0 ? `✅ Kalan: *${kalan} kcal*` : `⚠️ Hedef aşıldı: *${Math.abs(kalan)} kcal*`)
     );
@@ -589,6 +625,10 @@ async function handleMessage(userId: string, text: string) {
     profile.weight = kilo;
     profile.tdee = calculateTDEE(profile);
     profile.dailyCalorieGoal = goalCalories(profile.tdee, profile.goal);
+    const updatedMacros = calculateMacros(profile.weight, profile.goal, profile.dailyCalorieGoal);
+    profile.proteinGoal = updatedMacros.protein;
+    profile.carbGoal = updatedMacros.carb;
+    profile.fatGoal = updatedMacros.fat;
     saveProfile(profile);
     const fark = kilo - entries[0].weight;
     await sendTelegram(userId,
@@ -641,6 +681,10 @@ async function handleMessage(userId: string, text: string) {
       `🏃 Aktivite: ${actText}\n\n` +
       `🔥 TDEE: ${profile.tdee} kcal\n` +
       `📊 Günlük hedef: *${profile.dailyCalorieGoal} kcal*\n\n` +
+      `*Makro Hedeflerin:*\n` +
+      `🥩 Protein: ${profile.proteinGoal || "—"}g\n` +
+      `🍞 Karb: ${profile.carbGoal || "—"}g\n` +
+      `🧈 Yağ: ${profile.fatGoal || "—"}g\n\n` +
       `Üyelik: ${profile.createdAt}`
     );
     return;
