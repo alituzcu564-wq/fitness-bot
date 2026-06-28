@@ -143,9 +143,11 @@ async function sendTelegram(chatId: string, text: string) {
 async function getUpdates(offset: number): Promise<any[]> {
   try {
     const res = await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/getUpdates?offset=${offset}&timeout=4`);
+    if (!res.ok) { console.error(`getUpdates HTTP ${res.status}`); return []; }
     const data = (await res.json()) as any;
-    return data.ok ? data.result : [];
-  } catch { return []; }
+    if (!data.ok) { console.error(`getUpdates Telegram error:`, data.description); return []; }
+    return data.result;
+  } catch (e) { console.error("getUpdates hata:", e); return []; }
 }
 
 // ── Groq API ──────────────────────────────────────────────────────────────────
@@ -346,15 +348,9 @@ async function handleOnboarding(userId: string, text: string, profile: UserProfi
 async function handleMessage(userId: string, text: string) {
   const profile = loadProfile(userId);
 
-  // Onboarding devam ediyor mu?
-  if (profile?.onboardingStep) {
-    await handleOnboarding(userId, text, profile);
-    return;
-  }
-
-  // /başla
+  // /başla her zaman önce işlenir — onboarding sırasında bile sıfırlar
   if (text === "/başla" || text === "/basla" || text === "/start") {
-    if (profile) {
+    if (profile && !profile.onboardingStep) {
       await sendTelegram(userId, `Merhaba *${profile.name}*! Profilin zaten mevcut.\n\n/profil — bilgilerini gör\n/yardım — tüm komutlar`);
       return;
     }
@@ -370,6 +366,16 @@ async function handleMessage(userId: string, text: string) {
       `Sana özel kalori takibi ve antrenman programı hazırlayacağım.\n\n` +
       `Başlamak için birkaç sorum var. Adın ne?`
     );
+    return;
+  }
+
+  // Onboarding devam ediyor mu?
+  if (profile?.onboardingStep) {
+    if (text.startsWith("/")) {
+      await sendTelegram(userId, `⚠️ Kayıt devam ediyor, önce soruyu cevapla.\n\nBaştan başlamak için /başla yaz.`);
+      return;
+    }
+    await handleOnboarding(userId, text, profile);
     return;
   }
 
