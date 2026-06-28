@@ -380,6 +380,14 @@ async function handleMessage(userId: string, text: string) {
     return;
   }
 
+  // /reset - profili tamamen sil (pure ASCII, her zaman çalışır)
+  if (text === "/reset") {
+    const profilePath = path.join(userDir(userId), "profile.json");
+    if (fs.existsSync(profilePath)) fs.unlinkSync(profilePath);
+    await sendTelegram(userId, `Merhabalar, ben kişisel koçunuz! 🏋️\n\nİlk olarak adınızı öğrenebilir miyim?`);
+    return;
+  }
+
   // Onboarding devam ediyor mu?
   if (profile?.onboardingStep) {
     if (text.startsWith("/")) {
