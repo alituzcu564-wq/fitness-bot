@@ -1,5 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
+import * as http from "http";
 
 // ── Ortam ─────────────────────────────────────────────────────────────────────
 const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN!;
@@ -595,6 +596,11 @@ async function handleMessage(userId: string, text: string) {
 
 // ── Ana döngü ─────────────────────────────────────────────────────────────────
 async function main() {
+  // Railway health check için HTTP server
+  const PORT = process.env.PORT || 3000;
+  http.createServer((_, res) => { res.writeHead(200); res.end("OK"); }).listen(PORT);
+  console.log(`[FitBot] HTTP server port ${PORT}`);
+
   if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
   let offset = 0;
