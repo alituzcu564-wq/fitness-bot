@@ -230,6 +230,15 @@ async function handleOnboarding(userId: string, text: string, profile: UserProfi
   const t = text.trim();
   const step = profile.onboardingStep;
 
+  // /başla her yerden sıfırlar
+  if (t === "/başla" || t === "/basla" || t === "/start") {
+    profile.onboardingStep = "name";
+    profile.name = "";
+    saveProfile(profile);
+    await sendTelegram(userId, `🏋️ Baştan başlıyoruz!\n\nAdın ne?`);
+    return;
+  }
+
   if (step === "name") {
     if (t.length < 2) { await sendTelegram(userId, "⚠️ Geçerli bir isim gir."); return; }
     profile.name = t;
