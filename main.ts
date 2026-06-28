@@ -230,12 +230,12 @@ async function handleOnboarding(userId: string, text: string, profile: UserProfi
   const t = text.trim();
   const step = profile.onboardingStep;
 
-  // /başla her yerden sıfırlar
-  if (t === "/başla" || t === "/basla" || t === "/start") {
+  // Herhangi bir komut sırasında onboarding'i sıfırla
+  if (t.startsWith("/")) {
     profile.onboardingStep = "name";
     profile.name = "";
     saveProfile(profile);
-    await sendTelegram(userId, `🏋️ Baştan başlıyoruz!\n\nAdın ne?`);
+    await sendTelegram(userId, `FitBot'a hos geldin!\n\nAdin ne?`);
     return;
   }
 
@@ -354,13 +354,20 @@ async function handleOnboarding(userId: string, text: string, profile: UserProfi
 }
 
 // ── Komut işleyici ────────────────────────────────────────────────────────────
+const CODE_VERSION = "v4-reset-fix";
+
 async function handleMessage(userId: string, text: string) {
   const profile = loadProfile(userId);
+  console.log(`[${CODE_VERSION}] msg uid=${userId} text="${text}" step=${profile?.onboardingStep ?? "null"}`);
 
-  // /başla her zaman önce işlenir — onboarding sırasında bile sıfırlar
-  if (text === "/başla" || text === "/basla" || text === "/start") {
+  // Kayıt sıfırlama — /start, /basla, /s, veya herhangi /b* komutu
+  const cmd = text.split(" ")[0].toLowerCase();
+  const isReset = cmd === "/start" || cmd === "/basla" || cmd === "/s" ||
+    cmd.startsWith("/ba") || text.toLowerCase().includes("/ba");
+
+  if (isReset) {
     if (profile && !profile.onboardingStep) {
-      await sendTelegram(userId, `Merhaba *${profile.name}*! Profilin zaten mevcut.\n\n/profil — bilgilerini gör\n/yardım — tüm komutlar`);
+      await sendTelegram(userId, `Merhaba *${profile.name}*! Profilin zaten mevcut.\n\n/profil — bilgilerini gor\n/yardim — tum komutlar`);
       return;
     }
     const yeni: UserProfile = {
@@ -371,9 +378,9 @@ async function handleMessage(userId: string, text: string) {
     };
     saveProfile(yeni);
     await sendTelegram(userId,
-      `🏋️ *FitBot'a hoş geldin!*\n\n` +
-      `Sana özel kalori takibi ve antrenman programı hazırlayacağım.\n\n` +
-      `Başlamak için birkaç sorum var. Adın ne?`
+      `FitBot'a hos geldin!\n\n` +
+      `Sana ozel kalori takibi ve antrenman programi hazirlayacagim.\n\n` +
+      `Adin ne?`
     );
     return;
   }
@@ -381,7 +388,15 @@ async function handleMessage(userId: string, text: string) {
   // Onboarding devam ediyor mu?
   if (profile?.onboardingStep) {
     if (text.startsWith("/")) {
-      await sendTelegram(userId, `⚠️ Kayıt devam ediyor, önce soruyu cevapla.\n\nBaştan başlamak için /başla yaz.`);
+      // Herhangi komut = sifirla
+      const yeni: UserProfile = {
+        userId, name: "", age: 0, gender: "erkek", weight: 0, height: 0,
+        goal: "form_koru", activity: "orta", workoutType: "salon",
+        tdee: 0, dailyCalorieGoal: 0, onboardingStep: "name",
+        createdAt: new Date().toISOString().split("T")[0],
+      };
+      saveProfile(yeni);
+      await sendTelegram(userId, `FitBot'a hos geldin!\n\nAdin ne?`);
       return;
     }
     await handleOnboarding(userId, text, profile);
