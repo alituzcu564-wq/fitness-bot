@@ -1,0 +1,12 @@
+{
+  "name": "fitness-bot",
+  "version": "1.0.0",
+  "description": "Kişisel Fitness & Beslenme Takip Botu",
+  "scripts": {
+    "start": "ts-node main.ts"
+  },
+  "dependencies": {
+    "ts-node": "^10.9.2",
+    "typescript": "^5.4.5"
+  }
+}
