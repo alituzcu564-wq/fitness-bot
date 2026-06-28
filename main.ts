@@ -366,10 +366,6 @@ async function handleMessage(userId: string, text: string) {
     cmd.startsWith("/ba") || text.toLowerCase().includes("/ba");
 
   if (isReset) {
-    if (profile && !profile.onboardingStep) {
-      await sendTelegram(userId, `Merhaba *${profile.name}*! Profilin zaten mevcut.\n\n/profil — bilgilerini gor\n/yardim — tum komutlar`);
-      return;
-    }
     const yeni: UserProfile = {
       userId, name: "", age: 0, gender: "erkek", weight: 0, height: 0,
       goal: "form_koru", activity: "orta", workoutType: "salon",
