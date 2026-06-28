@@ -244,22 +244,30 @@ async function generateProgram(profile: UserProfile): Promise<WorkoutProgram> {
   const hedef = profile.goal === "kilo_ver" ? "yağ yakma" : profile.goal === "kilo_al" ? "kas kazanımı" : "form koruma";
   const cinsiyet = profile.gender === "erkek" ? "Erkek" : "Kadın";
 
-  const prompt = `Sen bilim tabanlı fitness uzmanısın. ${cinsiyet}, ${profile.age} yaş, ${profile.weight}kg, hedef: ${hedef}, antrenman: ${tip}.
+  // Hedef bazlı haftalık set hedefi (Jeff Nippard: 10-20 set/kas grubu/hafta)
+  const setHedefi = profile.goal === "kilo_al"
+    ? "15-20 set/kas grubu/hafta (üst sınırda tut, kas kazanımı için)"
+    : profile.goal === "kilo_ver"
+    ? "10-15 set/kas grubu/hafta (orta aralık, yağ yakarken kas koru)"
+    : "10-15 set/kas grubu/hafta (form koruma için yeterli)";
 
-7 günlük haftalık program oluştur. Dinlenme günleri null olsun. Maksimum 5 egzersiz/gün.
+  const prompt = `Sen bilim tabanlı fitness uzmanısın (Jeff Nippard metodolojisi). ${cinsiyet}, ${profile.age} yaş, ${profile.weight}kg, hedef: ${hedef}, antrenman: ${tip}.
 
-Her egzersize kısa bir "tip" ekle — yeni başlayanlar için uygulamada dikkat edilecek TEK önemli nokta (max 10 kelime, Türkçe, emir kipiyle). Örnekler:
-- Squat: "İnişte diziyi içe kapama, sırt düz tut"
-- Bench Press: "Göğse değdirirken kürek kemiklerini sıkıştır"
-- Deadlift: "Kalçayı öne it, sırtı düz tut"
-- Pull-up: "Tam açılmadan tekrarı bitirme"
-- Plank: "Kalçayı ne yukarı kaldır ne de sarkıt"
+BİLİMSEL HACIM KURALLARI (kesinlikle uygula):
+- Her kas grubu haftada minimum 2 kez çalışmalı (frekans = büyüme)
+- Haftalık set hedefi: ${setHedefi}
+- Bunu sağlamak için antrenman günü sayısını ayarla (hedef kilo almaksa 4 gün, diğerleri 3-4 gün)
+- Büyük kas grupları (göğüs, sırt, bacak): haftada 2x görünmeli
+- Küçük kas grupları (biceps, triceps, omuz): büyük grup günlerine eklenebilir
+- Örnek 4 günlük split: Pazartesi=Üst A, Çarşamba=Alt A, Cuma=Üst B, Cumartesi=Alt B
+
+KURAL: Her egzersize kısa "tip" ekle — yeni başlayanlar için TEK önemli form notu (max 10 kelime, Türkçe, emir kipi).
 
 SADECE JSON döndür, başka hiçbir şey yazma:
-{"Pazartesi":{"focus":"Göğüs + Triceps","exercises":[{"name":"Bench Press","sets":"4","reps":"8-10","rest":"90 sn","tip":"Göğse değdirirken kürek kemiklerini sıkıştır"}]},"Salı":null,"Çarşamba":{"focus":"Sırt + Biceps","exercises":[{"name":"Pull-up","sets":"4","reps":"6-8","rest":"90 sn","tip":"Tam açılmadan tekrarı bitirme"}]},"Perşembe":null,"Cuma":{"focus":"Bacak","exercises":[{"name":"Squat","sets":"4","reps":"10","rest":"90 sn","tip":"İnişte diziyi içe kapama"}]},"Cumartesi":null,"Pazar":null}`;
+{"Pazartesi":{"focus":"Göğüs + Triceps","exercises":[{"name":"Bench Press","sets":"4","reps":"8-10","rest":"90 sn","tip":"Göğse değdirirken kürek kemiklerini sıkıştır"},{"name":"Incline DB Press","sets":"3","reps":"10-12","rest":"90 sn","tip":"Omuzları geriye at"},{"name":"Tricep Pushdown","sets":"3","reps":"12-15","rest":"60 sn","tip":"Dirsekleri sabit tut"}]},"Salı":null,"Çarşamba":{"focus":"Sırt + Biceps","exercises":[{"name":"Pull-up","sets":"4","reps":"6-8","rest":"90 sn","tip":"Tam açılmadan tekrarı bitirme"},{"name":"Barbell Row","sets":"4","reps":"8-10","rest":"90 sn","tip":"Sırtı düz tut"},{"name":"Dumbbell Curl","sets":"3","reps":"10-12","rest":"60 sn","tip":"Omuzları geriye at"}]},"Perşembe":null,"Cuma":{"focus":"Bacak + Omuz","exercises":[{"name":"Squat","sets":"4","reps":"8-10","rest":"120 sn","tip":"İnişte diziyi içe kapama"},{"name":"Leg Press","sets":"3","reps":"10-12","rest":"90 sn","tip":"Dizleri geçirmeden kalk"},{"name":"OHP","sets":"3","reps":"8-10","rest":"90 sn","tip":"Core'u sık, sırtı düz tut"}]},"Cumartesi":null,"Pazar":null}`;
 
   try {
-    const raw = await groqChat(prompt, 1500);
+    const raw = await groqChat(prompt, 2500);
     const m = raw.match(/\{[\s\S]+\}/);
     if (!m) throw new Error("JSON yok");
     return { generatedAt: new Date().toISOString().split("T")[0], type: tip, days: JSON.parse(m[0]) };
