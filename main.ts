@@ -1,6 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import * as http from "http";
+import { calculateMeal } from "./nutritionDB";
 
 // ── Ortam ─────────────────────────────────────────────────────────────────────
 const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN!;
@@ -45,6 +46,7 @@ interface Exercise {
   sets: string;
   reps: string;
   rest: string;
+  tip?: string;
 }
 
 interface WorkoutDay {
@@ -167,14 +169,44 @@ async function groqChat(prompt: string, max_tokens = 1024): Promise<string> {
   return ((await res.json()) as any).choices[0].message.content;
 }
 
-// ── Kalori tahmini (AI) ───────────────────────────────────────────────────────
+// ── Kalori tahmini — önce DB, sonra AI ───────────────────────────────────────
 async function estimateMeal(description: string): Promise<MealLog> {
-  const prompt = `Türkçe yemek: "${description}"
-Bu yemeğin besin değerlerini tahmin et. SADECE JSON döndür, başka hiçbir şey yazma:
-{"calories":350,"protein":20,"carb":40,"fat":12}
-Gerçekçi ve ortalama porsiyona göre hesapla.`;
+  // Önce yerel veritabanında ara
+  const dbResult = calculateMeal(description);
+  if (dbResult && dbResult.calories > 0) {
+    console.log(`[DB] "${description}" → ${dbResult.calories} kcal (matched: ${dbResult.matched.join(", ")})`);
+    return {
+      time: new Date().toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" }),
+      description,
+      calories: dbResult.calories,
+      protein: dbResult.protein,
+      carb: dbResult.carb,
+      fat: dbResult.fat,
+    };
+  }
 
-  const raw = await groqChat(prompt, 150);
+  // DB'de bulunamadı, Groq'a sor
+  console.log(`[AI] "${description}" → Groq'a soruyorum`);
+  const prompt = `Sen bir diyetisyen ve besin uzmanısın. Kullanıcı şunu yedi: "${description}"
+
+KURALLAR:
+- Her malzemeyi AYRI AYRI hesapla, sonra topla
+- Gramaj verilmişse ona göre hesapla, verilmemişse standart porsiyon kullan
+- 1 yumurta = 70 kcal, 6g protein, 0.5g karb, 5g yağ
+- 100g yulaf = 380 kcal, 13g protein, 66g karb, 7g yağ
+- 100ml süt = 60 kcal, 3g protein, 5g karb, 3g yağ
+- 1g zeytinyağı = 9 kcal, 0g protein, 0g karb, 1g yağ
+- 1g tereyağı = 7 kcal, 0g protein, 0g karb, 0.8g yağ
+- 100g lor peyniri = 100 kcal, 16g protein, 2g karb, 2g yağ
+- 100g pilav = 130 kcal, 2.5g protein, 28g karb, 0.3g yağ
+- 100g tavuk göğsü = 165 kcal, 31g protein, 0g karb, 3.6g yağ
+- Protein tozu/gainer: 1 ölçek ≈ 200-250 kcal, 12-25g protein, 30-40g karb, 3-5g yağ
+- Sonuçları YUVARLAMA, tam sayı yaz
+
+SADECE bu JSON formatında döndür, başka hiçbir şey yazma:
+{"calories":350,"protein":20,"carb":40,"fat":12}`;
+
+  const raw = await groqChat(prompt, 300);
   try {
     const m = raw.match(/\{[^}]+\}/);
     if (!m) throw new Error("JSON yok");
@@ -198,11 +230,19 @@ async function generateProgram(profile: UserProfile): Promise<WorkoutProgram> {
   const hedef = profile.goal === "kilo_ver" ? "yağ yakma" : profile.goal === "kilo_al" ? "kas kazanımı" : "form koruma";
   const cinsiyet = profile.gender === "erkek" ? "Erkek" : "Kadın";
 
-  const prompt = `${cinsiyet}, ${profile.age} yaş, ${profile.weight}kg, hedef: ${hedef}, antrenman: ${tip}.
-7 günlük haftalık program oluştur. Dinlenme günleri null olsun.
-SADECE JSON döndür, başka bir şey yazma:
-{"Pazartesi":{"focus":"Göğüs + Triceps","exercises":[{"name":"Bench Press","sets":"4","reps":"8-10","rest":"90 sn"}]},"Salı":null,"Çarşamba":{"focus":"Sırt + Biceps","exercises":[{"name":"Pull-up","sets":"4","reps":"6-8","rest":"90 sn"}]},"Perşembe":null,"Cuma":{"focus":"Bacak","exercises":[{"name":"Squat","sets":"4","reps":"10","rest":"90 sn"}]},"Cumartesi":null,"Pazar":null}
-Maksimum 5 egzersiz per gün. Gerçekçi ve uygulanabilir olsun.`;
+  const prompt = `Sen bilim tabanlı fitness uzmanısın. ${cinsiyet}, ${profile.age} yaş, ${profile.weight}kg, hedef: ${hedef}, antrenman: ${tip}.
+
+7 günlük haftalık program oluştur. Dinlenme günleri null olsun. Maksimum 5 egzersiz/gün.
+
+Her egzersize kısa bir "tip" ekle — yeni başlayanlar için uygulamada dikkat edilecek TEK önemli nokta (max 10 kelime, Türkçe, emir kipiyle). Örnekler:
+- Squat: "İnişte diziyi içe kapama, sırt düz tut"
+- Bench Press: "Göğse değdirirken kürek kemiklerini sıkıştır"
+- Deadlift: "Kalçayı öne it, sırtı düz tut"
+- Pull-up: "Tam açılmadan tekrarı bitirme"
+- Plank: "Kalçayı ne yukarı kaldır ne de sarkıt"
+
+SADECE JSON döndür, başka hiçbir şey yazma:
+{"Pazartesi":{"focus":"Göğüs + Triceps","exercises":[{"name":"Bench Press","sets":"4","reps":"8-10","rest":"90 sn","tip":"Göğse değdirirken kürek kemiklerini sıkıştır"}]},"Salı":null,"Çarşamba":{"focus":"Sırt + Biceps","exercises":[{"name":"Pull-up","sets":"4","reps":"6-8","rest":"90 sn","tip":"Tam açılmadan tekrarı bitirme"}]},"Perşembe":null,"Cuma":{"focus":"Bacak","exercises":[{"name":"Squat","sets":"4","reps":"10","rest":"90 sn","tip":"İnişte diziyi içe kapama"}]},"Cumartesi":null,"Pazar":null}`;
 
   try {
     const raw = await groqChat(prompt, 1500);
@@ -344,11 +384,36 @@ async function handleOnboarding(userId: string, text: string, profile: UserProfi
       `⚖️ ${profile.weight} kg | ${profile.height} cm\n` +
       `🎯 Hedef: ${goalText}\n\n` +
       `🔥 Günlük kalori hedefin: *${profile.dailyCalorieGoal} kcal*\n` +
-      `📊 TDEE: ${profile.tdee} kcal\n\n` +
-      `Haftalık programın hazır! Aşağıdaki komutları kullanabilirsin:\n\n` +
+      `📊 TDEE: ${profile.tdee} kcal`
+    );
+
+    // Haftalık programı detaylı göster
+    const sira = ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi", "Pazar"];
+    let programMsg = `📅 *Haftalık Antrenman Programın*\n_(${program.type})_\n\n`;
+    for (const gun of sira) {
+      const g = program.days[gun];
+      if (!g) {
+        programMsg += `💤 *${gun}:* Dinlenme\n\n`;
+      } else {
+        programMsg += `💪 *${gun} — ${g.focus}*\n`;
+        for (const e of g.exercises) {
+          programMsg += `  • ${e.name} — ${e.sets} set × ${e.reps} (${e.rest})\n`;
+          if (e.tip) programMsg += `    💡 _${e.tip}_\n`;
+        }
+        programMsg += `\n`;
+      }
+    }
+    await sendTelegram(userId, programMsg);
+
+    await sendTelegram(userId,
+      `🎯 *Komutların:*\n\n` +
+      `/öğün \\[yemek\\] — Öğün kaydet\n` +
+      `/bugün — Günlük kalori özeti\n` +
       `/antrenman — Bugünkü egzersizler\n` +
-      `/öğün 2 yumurta — Yemek kaydet\n` +
-      `/bugün — Kalori özeti`
+      `/tamamla — Antrenmanı bitir\n` +
+      `/tartı \\[kg\\] — Kilo kaydet\n` +
+      `/ilerleme — İlerleme raporu\n` +
+      `/yardım — Tüm komutlar`
     );
     return;
   }
@@ -367,6 +432,10 @@ async function handleMessage(userId: string, text: string) {
     cmd.startsWith("/ba") || text.toLowerCase().includes("/ba");
 
   if (isReset) {
+    if (profile && !profile.onboardingStep) {
+      await sendTelegram(userId, `Tekrar hoş geldin *${profile.name}*! 🏋️\n\n/yardım — tüm komutlar\n/profil — bilgilerin`);
+      return;
+    }
     const yeni: UserProfile = {
       userId, name: "", age: 0, gender: "erkek", weight: 0, height: 0,
       goal: "form_koru", activity: "orta", workoutType: "salon",
@@ -475,9 +544,11 @@ async function handleMessage(userId: string, text: string) {
       await sendTelegram(userId, `💤 *${bugunAd}* — Dinlenme günü\n\nKaslarını dinlendir, iyi uyu! 🌙`);
       return;
     }
-    const egzersizler = bugun.exercises.map((e, i) =>
-      `${i + 1}. *${e.name}*\n   ${e.sets} set × ${e.reps} | Dinlenme: ${e.rest}`
-    ).join("\n\n");
+    const egzersizler = bugun.exercises.map((e, i) => {
+      let txt = `${i + 1}. *${e.name}*\n   ${e.sets} set × ${e.reps} | Dinlenme: ${e.rest}`;
+      if (e.tip) txt += `\n   💡 _${e.tip}_`;
+      return txt;
+    }).join("\n\n");
     await sendTelegram(userId,
       `💪 *${bugunAd} — ${bugun.focus}*\n\n${egzersizler}\n\n` +
       `Tamamladın mı? /tamamla yazabilirsin ✅`
@@ -575,6 +646,34 @@ async function handleMessage(userId: string, text: string) {
     return;
   }
 
+  // /yeniprogram
+  if (text === "/yeniprogram") {
+    await sendTelegram(userId, "⏳ Yeni antrenman programın hazırlanıyor...");
+    try {
+      const program = await generateProgram(profile);
+      saveProgram(userId, program);
+      const sira = ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi", "Pazar"];
+      let programMsg = `📅 *Yeni Haftalık Antrenman Programın*\n_(${program.type})_\n\n`;
+      for (const gun of sira) {
+        const g = program.days[gun];
+        if (!g) {
+          programMsg += `💤 *${gun}:* Dinlenme\n\n`;
+        } else {
+          programMsg += `💪 *${gun} — ${g.focus}*\n`;
+          for (const e of g.exercises) {
+            programMsg += `  • ${e.name} — ${e.sets} set × ${e.reps} (${e.rest})\n`;
+            if (e.tip) programMsg += `    💡 _${e.tip}_\n`;
+          }
+          programMsg += `\n`;
+        }
+      }
+      await sendTelegram(userId, programMsg);
+    } catch (e) {
+      await sendTelegram(userId, `⚠️ Program oluşturulamadı: ${e}`);
+    }
+    return;
+  }
+
   // /yardım
   if (text === "/yardım" || text === "/yardim" || text === "/help") {
     await sendTelegram(userId,
@@ -585,6 +684,7 @@ async function handleMessage(userId: string, text: string) {
       `💪 /antrenman — Bugünkü program\n` +
       `✅ /tamamla — Antrenmanı tamamlandı say\n` +
       `📅 /program — Haftalık program\n` +
+      `🔄 /yeniprogram — Yeni program oluştur\n` +
       `⚖️ /tartı \\[kg\\] — Kilo kaydet\n` +
       `📈 /ilerleme — İlerleme raporu\n` +
       `❓ /yardım — Bu menü\n\n` +
