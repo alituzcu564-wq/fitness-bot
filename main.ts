@@ -20,6 +20,7 @@ interface UserProfile {
   goal: "kilo_ver" | "kilo_al" | "form_koru";
   activity: "sedanter" | "hafif" | "orta" | "aktif" | "cok_aktif";
   workoutType: "ev" | "salon" | "ikisi";
+  trainingStyle: "guc" | "hipertrofi";
   tdee: number;
   dailyCalorieGoal: number;
   proteinGoal: number;
@@ -244,22 +245,32 @@ async function generateProgram(profile: UserProfile): Promise<WorkoutProgram> {
   const hedef = profile.goal === "kilo_ver" ? "yağ yakma" : profile.goal === "kilo_al" ? "kas kazanımı" : "form koruma";
   const cinsiyet = profile.gender === "erkek" ? "Erkek" : "Kadın";
 
-  // Hedef bazlı haftalık set hedefi (Jeff Nippard: 10-20 set/kas grubu/hafta)
+  const style = (profile.trainingStyle || "hipertrofi") as "guc" | "hipertrofi";
+  const repAraligi = style === "guc"
+    ? "Ana hareketler 3-5 tekrar (ağır), yardımcı hareketler 5-8 tekrar, dinlenme 3-5 dk"
+    : "Ana hareketler 6-10 tekrar, yardımcı hareketler 10-15 tekrar, dinlenme 60-90 sn";
   const setHedefi = profile.goal === "kilo_al"
-    ? "15-20 set/kas grubu/hafta (üst sınırda tut, kas kazanımı için)"
-    : profile.goal === "kilo_ver"
-    ? "10-15 set/kas grubu/hafta (orta aralık, yağ yakarken kas koru)"
-    : "10-15 set/kas grubu/hafta (form koruma için yeterli)";
+    ? "15-20 set/kas grubu/hafta"
+    : "10-15 set/kas grubu/hafta";
+  const gunSayisi = profile.goal === "kilo_al" ? "4" : "3";
 
-  const prompt = `Sen bilim tabanlı fitness uzmanısın (Jeff Nippard metodolojisi). ${cinsiyet}, ${profile.age} yaş, ${profile.weight}kg, hedef: ${hedef}, antrenman: ${tip}.
+  const prompt = `Sen bilim tabanlı fitness uzmanısın (Jeff Nippard metodolojisi). ${cinsiyet}, ${profile.age} yaş, ${profile.weight}kg, hedef: ${hedef}, antrenman: ${tip}, tarz: ${style === "guc" ? "güç antrenmanı" : "hipertrofi (kas kazanımı)"}.
 
-BİLİMSEL HACIM KURALLARI (kesinlikle uygula):
-- Her kas grubu haftada minimum 2 kez çalışmalı (frekans = büyüme)
+PROGRAM YAPISI (kesinlikle uy):
+- Split: Push / Pull / Legs — HER ZAMAN bu yapıyı kullan
+- ${gunSayisi === "4" ? "4 günlük PPL: Pazartesi=Push, Çarşamba=Pull, Cuma=Legs, Pazar=Push B veya Upper" : "3 günlük PPL: Pazartesi=Push, Çarşamba=Pull, Cuma=Legs"}
+- Her kas grubu haftada minimum 2 kez çalışmalı
 - Haftalık set hedefi: ${setHedefi}
-- Bunu sağlamak için antrenman günü sayısını ayarla (hedef kilo almaksa 4 gün, diğerleri 3-4 gün)
-- Büyük kas grupları (göğüs, sırt, bacak): haftada 2x görünmeli
-- Küçük kas grupları (biceps, triceps, omuz): büyük grup günlerine eklenebilir
-- Örnek 4 günlük split: Pazartesi=Üst A, Çarşamba=Alt A, Cuma=Üst B, Cumartesi=Alt B
+
+EGZERSİZ SAYISI:
+- Her antrenman günü 5-7 egzersiz (kesinlikle 5'in altına düşme)
+- Push günü: Göğüs 3-4 egzersiz + Omuz 1-2 egzersiz + Triceps 1-2 egzersiz
+- Pull günü: Sırt 3-4 egzersiz + Biceps 2 egzersiz
+- Legs günü: Quad 2-3 egzersiz + Hamstring 1-2 egzersiz + Glute/Karın 1-2 egzersiz
+- Her egzersiz 3-4 set
+
+TEKRAR / DİNLENME:
+- ${repAraligi}
 
 KURAL: Her egzersize kısa "tip" ekle — yeni başlayanlar için TEK önemli form notu (max 10 kelime, Türkçe, emir kipi).
 
@@ -267,7 +278,7 @@ SADECE JSON döndür, başka hiçbir şey yazma:
 {"Pazartesi":{"focus":"Göğüs + Triceps","exercises":[{"name":"Bench Press","sets":"4","reps":"8-10","rest":"90 sn","tip":"Göğse değdirirken kürek kemiklerini sıkıştır"},{"name":"Incline DB Press","sets":"3","reps":"10-12","rest":"90 sn","tip":"Omuzları geriye at"},{"name":"Tricep Pushdown","sets":"3","reps":"12-15","rest":"60 sn","tip":"Dirsekleri sabit tut"}]},"Salı":null,"Çarşamba":{"focus":"Sırt + Biceps","exercises":[{"name":"Pull-up","sets":"4","reps":"6-8","rest":"90 sn","tip":"Tam açılmadan tekrarı bitirme"},{"name":"Barbell Row","sets":"4","reps":"8-10","rest":"90 sn","tip":"Sırtı düz tut"},{"name":"Dumbbell Curl","sets":"3","reps":"10-12","rest":"60 sn","tip":"Omuzları geriye at"}]},"Perşembe":null,"Cuma":{"focus":"Bacak + Omuz","exercises":[{"name":"Squat","sets":"4","reps":"8-10","rest":"120 sn","tip":"İnişte diziyi içe kapama"},{"name":"Leg Press","sets":"3","reps":"10-12","rest":"90 sn","tip":"Dizleri geçirmeden kalk"},{"name":"OHP","sets":"3","reps":"8-10","rest":"90 sn","tip":"Core'u sık, sırtı düz tut"}]},"Cumartesi":null,"Pazar":null}`;
 
   try {
-    const raw = await groqChat(prompt, 2500);
+    const raw = await groqChat(prompt, 3500);
     const m = raw.match(/\{[\s\S]+\}/);
     if (!m) throw new Error("JSON yok");
     return { generatedAt: new Date().toISOString().split("T")[0], type: tip, days: JSON.parse(m[0]) };
@@ -385,6 +396,22 @@ async function handleOnboarding(userId: string, text: string, profile: UserProfi
     else if (t === "2" || t.includes("salon")) profile.workoutType = "salon";
     else if (t === "3" || t.includes("ikisi") || t.includes("her")) profile.workoutType = "ikisi";
     else { await sendTelegram(userId, "⚠️ 1, 2 veya 3 yaz"); return; }
+    profile.onboardingStep = "trainingStyle";
+    saveProfile(profile);
+    await sendTelegram(userId,
+      "Antrenman tarzın ne olsun?\n\n" +
+      "1️⃣ *Güç* — Ağır ağırlık, düşük tekrar (3-5 tekrar)\n" +
+      "   _Amaç: Ne kadar kaldırabileceğini artırmak_\n\n" +
+      "2️⃣ *Kas Kazanımı* — Orta ağırlık, orta tekrar (8-12 tekrar)\n" +
+      "   _Amaç: Maksimum kas büyümesi (hipertrofi)_"
+    );
+    return;
+  }
+
+  if (step === "trainingStyle") {
+    if (t === "1" || t.toLowerCase().includes("güç") || t.toLowerCase().includes("guc")) profile.trainingStyle = "guc";
+    else if (t === "2" || t.toLowerCase().includes("kas") || t.toLowerCase().includes("hip")) profile.trainingStyle = "hipertrofi";
+    else { await sendTelegram(userId, "⚠️ 1 (Güç) veya 2 (Kas Kazanımı) yaz"); return; }
 
     profile.tdee = calculateTDEE(profile);
     profile.dailyCalorieGoal = goalCalories(profile.tdee, profile.goal);
@@ -468,9 +495,9 @@ async function handleMessage(userId: string, text: string) {
     }
     const yeni: UserProfile = {
       userId, name: "", age: 0, gender: "erkek", weight: 0, height: 0,
-      goal: "form_koru", activity: "orta", workoutType: "salon",
-      tdee: 0, dailyCalorieGoal: 0, onboardingStep: "name",
-      createdAt: new Date().toISOString().split("T")[0],
+      goal: "form_koru", activity: "orta", workoutType: "salon", trainingStyle: "hipertrofi",
+      tdee: 0, dailyCalorieGoal: 0, proteinGoal: 0, carbGoal: 0, fatGoal: 0,
+      onboardingStep: "name", createdAt: new Date().toISOString().split("T")[0],
     };
     saveProfile(yeni);
     await sendTelegram(userId,
@@ -494,9 +521,9 @@ async function handleMessage(userId: string, text: string) {
       // Herhangi komut = sifirla
       const yeni: UserProfile = {
         userId, name: "", age: 0, gender: "erkek", weight: 0, height: 0,
-        goal: "form_koru", activity: "orta", workoutType: "salon",
-        tdee: 0, dailyCalorieGoal: 0, onboardingStep: "name",
-        createdAt: new Date().toISOString().split("T")[0],
+        goal: "form_koru", activity: "orta", workoutType: "salon", trainingStyle: "hipertrofi",
+        tdee: 0, dailyCalorieGoal: 0, proteinGoal: 0, carbGoal: 0, fatGoal: 0,
+        onboardingStep: "name", createdAt: new Date().toISOString().split("T")[0],
       };
       saveProfile(yeni);
       await sendTelegram(userId, `Merhabalar, ben kişisel koçunuz! 🏋️\n\nİlk olarak adınızı öğrenebilir miyim?`);
